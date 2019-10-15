@@ -1,46 +1,21 @@
 //! Serial-in parallel-out shift register
 
 use core::cell::RefCell;
-use hal::digital::OutputPin;
-use core::mem;
-use core::ptr;
+use hal::digital::v2::OutputPin;
+use void::Void;
 
 trait ShiftRegisterInternal {
     fn update(&self, index: usize, command: bool);
-}
-
-/// Output pin of the shift register
-pub struct ShiftRegisterPin<'a>
-{
-    shift_register: &'a ShiftRegisterInternal,
-    index: usize,
-}
-
-impl<'a> ShiftRegisterPin<'a>
-{
-    fn new(shift_register: &'a ShiftRegisterInternal, index: usize) -> Self {
-        ShiftRegisterPin { shift_register, index }
-    }
-}
-
-impl<'a> OutputPin for ShiftRegisterPin<'a>
-{
-    fn set_low(&mut self) {
-        self.shift_register.update(self.index, false);
-    }
-
-    fn set_high(&mut self) {
-        self.shift_register.update(self.index, true);
-    }
+    fn flush(&self);
 }
 
 macro_rules! ShiftRegisterBuilder {
     ($name: ident, $size: expr) => {
         /// Serial-in parallel-out shift register
         pub struct $name<Pin1, Pin2, Pin3>
-            where Pin1: OutputPin,
-                  Pin2: OutputPin,
-                  Pin3: OutputPin,
+            where Pin1: OutputPin<Error = Void>,
+                  Pin2: OutputPin<Error = Void>,
+                  Pin3: OutputPin<Error = Void>,
         {
             clock: RefCell<Pin1>,
             latch: RefCell<Pin2>,
@@ -49,32 +24,34 @@ macro_rules! ShiftRegisterBuilder {
         }
 
         impl<Pin1, Pin2, Pin3> ShiftRegisterInternal for $name<Pin1, Pin2, Pin3>
-            where Pin1: OutputPin,
-                  Pin2: OutputPin,
-                  Pin3: OutputPin,
+            where Pin1: OutputPin<Error = Void>,
+                  Pin2: OutputPin<Error = Void>,
+                  Pin3: OutputPin<Error = Void>,
         {
             /// Sets the value of the shift register output at `index` to value `command`
             fn update(&self, index: usize, command: bool) {
                 self.output_state.borrow_mut()[index] = command;
+            }
+
+            fn flush(&self) {
                 let output_state = self.output_state.borrow();
-                self.latch.borrow_mut().set_low();
+                self.latch.borrow_mut().set_low().unwrap();
 
                 for i in 1..=output_state.len() {
-                    if output_state[output_state.len()-i] {self.data.borrow_mut().set_high();}
-                        else {self.data.borrow_mut().set_low();}
-                    self.clock.borrow_mut().set_high();
-                    self.clock.borrow_mut().set_low();
+                    if output_state[output_state.len()-i] {self.data.borrow_mut().set_high().unwrap();}
+                        else {self.data.borrow_mut().set_low().unwrap();}
+                    self.clock.borrow_mut().set_high().unwrap();
+                    self.clock.borrow_mut().set_low().unwrap();
                 }
-
-                self.latch.borrow_mut().set_high();
+                self.latch.borrow_mut().set_high().unwrap();
             }
         }
 
 
         impl<Pin1, Pin2, Pin3> $name<Pin1, Pin2, Pin3>
-            where Pin1: OutputPin,
-                  Pin2: OutputPin,
-                  Pin3: OutputPin,
+            where Pin1: OutputPin<Error = Void>,
+                  Pin2: OutputPin<Error = Void>,
+                  Pin3: OutputPin<Error = Void>,
         {
             /// Creates a new SIPO shift register from clock, latch, and data output pins
             pub fn new(clock: Pin1, latch: Pin2, data: Pin3) -> Self {
@@ -84,20 +61,6 @@ macro_rules! ShiftRegisterBuilder {
                     data: RefCell::new(data),
                     output_state: RefCell::new([false; $size]),
                 }
-            }
-
-            /// Get embedded-hal output pins to control the shift register outputs
-            pub fn decompose(&self) -> [ShiftRegisterPin; $size] {
-                let mut pins: [ShiftRegisterPin; $size];
-
-                unsafe {
-                    pins = mem::uninitialized();
-                    for (index, elem) in pins[..].iter_mut().enumerate() {
-                        ptr::write(elem, ShiftRegisterPin::new(self, index));
-                    }
-                }
-
-                pins
             }
 
             /// Consume the shift register and return the original clock, latch, and data output pins
