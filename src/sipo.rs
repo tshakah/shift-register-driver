@@ -1,16 +1,17 @@
 //! Serial-in parallel-out shift register
 
 use core::cell::RefCell;
-use hal::digital::v2::OutputPin;
 use core::convert::Infallible;
+use hal::digital::v2::OutputPin;
 
 macro_rules! ShiftRegisterBuilder {
     ($name: ident, $size: expr) => {
         /// Serial-in parallel-out shift register
         pub struct $name<Pin1, Pin2, Pin3>
-            where Pin1: OutputPin<Error = Infallible>,
-                  Pin2: OutputPin<Error = Infallible>,
-                  Pin3: OutputPin<Error = Infallible>,
+        where
+            Pin1: OutputPin<Error = Infallible>,
+            Pin2: OutputPin<Error = Infallible>,
+            Pin3: OutputPin<Error = Infallible>,
         {
             clock: RefCell<Pin1>,
             latch: RefCell<Pin2>,
@@ -19,9 +20,10 @@ macro_rules! ShiftRegisterBuilder {
         }
 
         impl<Pin1, Pin2, Pin3> $name<Pin1, Pin2, Pin3>
-            where Pin1: OutputPin<Error = Infallible>,
-                  Pin2: OutputPin<Error = Infallible>,
-                  Pin3: OutputPin<Error = Infallible>,
+        where
+            Pin1: OutputPin<Error = Infallible>,
+            Pin2: OutputPin<Error = Infallible>,
+            Pin3: OutputPin<Error = Infallible>,
         {
             /// Creates a new SIPO shift register from clock, latch, and data output pins
             pub fn new(clock: Pin1, latch: Pin2, data: Pin3) -> Self {
@@ -44,8 +46,12 @@ macro_rules! ShiftRegisterBuilder {
                 self.latch.borrow_mut().set_low().unwrap();
 
                 for i in 1..=output_state.len() {
-                    if output_state[output_state.len()-i] {self.data.borrow_mut().set_high().unwrap();}
-                        else {self.data.borrow_mut().set_low().unwrap();}
+                    if output_state[output_state.len() - i] {
+                        self.data.borrow_mut().set_high().unwrap();
+                    } else {
+                        self.data.borrow_mut().set_low().unwrap();
+                    }
+
                     self.clock.borrow_mut().set_high().unwrap();
                     self.clock.borrow_mut().set_low().unwrap();
                 }
@@ -54,12 +60,16 @@ macro_rules! ShiftRegisterBuilder {
 
             /// Consume the shift register and return the original clock, latch, and data output pins
             pub fn release(self) -> (Pin1, Pin2, Pin3) {
-                let Self{clock, latch, data, output_state: _} = self;
+                let Self {
+                    clock,
+                    latch,
+                    data,
+                    output_state: _,
+                } = self;
                 (clock.into_inner(), latch.into_inner(), data.into_inner())
             }
         }
-
-    }
+    };
 }
 
 ShiftRegisterBuilder!(ShiftRegister8, 8);
