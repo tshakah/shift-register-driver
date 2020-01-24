@@ -2,20 +2,15 @@
 
 use core::cell::RefCell;
 use hal::digital::v2::OutputPin;
-use void::Void;
-
-trait ShiftRegisterInternal {
-    fn update(&self, index: usize, command: bool);
-    fn flush(&self);
-}
+use core::convert::Infallible;
 
 macro_rules! ShiftRegisterBuilder {
     ($name: ident, $size: expr) => {
         /// Serial-in parallel-out shift register
         pub struct $name<Pin1, Pin2, Pin3>
-            where Pin1: OutputPin<Error = Void>,
-                  Pin2: OutputPin<Error = Void>,
-                  Pin3: OutputPin<Error = Void>,
+            where Pin1: OutputPin<Error = Infallible>,
+                  Pin2: OutputPin<Error = Infallible>,
+                  Pin3: OutputPin<Error = Infallible>,
         {
             clock: RefCell<Pin1>,
             latch: RefCell<Pin2>,
@@ -23,17 +18,28 @@ macro_rules! ShiftRegisterBuilder {
             output_state: RefCell<[bool; $size]>,
         }
 
-        impl<Pin1, Pin2, Pin3> ShiftRegisterInternal for $name<Pin1, Pin2, Pin3>
-            where Pin1: OutputPin<Error = Void>,
-                  Pin2: OutputPin<Error = Void>,
-                  Pin3: OutputPin<Error = Void>,
+        impl<Pin1, Pin2, Pin3> $name<Pin1, Pin2, Pin3>
+            where Pin1: OutputPin<Error = Infallible>,
+                  Pin2: OutputPin<Error = Infallible>,
+                  Pin3: OutputPin<Error = Infallible>,
         {
+            /// Creates a new SIPO shift register from clock, latch, and data output pins
+            pub fn new(clock: Pin1, latch: Pin2, data: Pin3) -> Self {
+                $name {
+                    clock: RefCell::new(clock),
+                    latch: RefCell::new(latch),
+                    data: RefCell::new(data),
+                    output_state: RefCell::new([false; $size]),
+                }
+            }
+
             /// Sets the value of the shift register output at `index` to value `command`
-            fn update(&self, index: usize, command: bool) {
+            pub fn update(&self, index: usize, command: bool) {
                 self.output_state.borrow_mut()[index] = command;
             }
 
-            fn flush(&self) {
+            /// Pushes the current state to the register
+            pub fn flush(&self) {
                 let output_state = self.output_state.borrow();
                 self.latch.borrow_mut().set_low().unwrap();
 
@@ -44,23 +50,6 @@ macro_rules! ShiftRegisterBuilder {
                     self.clock.borrow_mut().set_low().unwrap();
                 }
                 self.latch.borrow_mut().set_high().unwrap();
-            }
-        }
-
-
-        impl<Pin1, Pin2, Pin3> $name<Pin1, Pin2, Pin3>
-            where Pin1: OutputPin<Error = Void>,
-                  Pin2: OutputPin<Error = Void>,
-                  Pin3: OutputPin<Error = Void>,
-        {
-            /// Creates a new SIPO shift register from clock, latch, and data output pins
-            pub fn new(clock: Pin1, latch: Pin2, data: Pin3) -> Self {
-                $name {
-                    clock: RefCell::new(clock),
-                    latch: RefCell::new(latch),
-                    data: RefCell::new(data),
-                    output_state: RefCell::new([false; $size]),
-                }
             }
 
             /// Consume the shift register and return the original clock, latch, and data output pins
